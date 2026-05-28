@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Load Tester - k6</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root { --bg: #0d1117; --bg2: #161b22; --bg3: #1c2128; --border: #30363d; --text: #c9d1d9; --text2: #f0f6fc; --text3: #8b949e; --text4: #484f58; --accent: #58a6ff; --green: #3fb950; --green-bg: #23863633; --red: #f85149; --yellow: #d29922; --purple: #bc8cff; --orange: #f78166; --input-bg: #0d1117; }
+  [data-theme="light"] { --bg: #ffffff; --bg2: #f6f8fa; --bg3: #eaeef2; --border: #d0d7de; --text: #24292f; --text2: #1f2328; --text3: #656d76; --text4: #8b949e; --accent: #0969da; --green: #1a7f37; --green-bg: #dafbe1; --red: #cf222e; --yellow: #9a6700; --purple: #8250df; --orange: #bc4c00; --input-bg: #ffffff; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+  .container { max-width: 1320px; margin: 0 auto; padding: 20px; }
+  header { display: flex; align-items: center; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; }
+  header h1 { font-size: 24px; font-weight: 600; color: var(--text2); }
+  header .badge { background: var(--green); color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+  .status-bar { display: flex; gap: 16px; align-items: center; font-size: 13px; color: var(--text3); flex-wrap: wrap; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .status-dot.online { background: var(--green); }
+  .status-dot.offline { background: var(--red); }
+  .status-dot.running { background: var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .theme-btn { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .theme-btn:hover { background: var(--bg3); }
+  .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text2); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .card h2 .collapse-icon { font-size: 12px; color: var(--text3); transition: transform 0.2s; }
+  .card h2.collapsed .collapse-icon { transform: rotate(-90deg); }
+  .card-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .card-body.collapsed { max-height: 0; padding: 0; margin: 0; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; color: var(--text3); margin-bottom: 4px; font-weight: 500; }
+  .form-group label .tooltip-icon { display: inline-block; width: 14px; height: 14px; background: var(--border); color: var(--text3); border-radius: 50%; text-align: center; font-size: 10px; line-height: 14px; cursor: help; margin-left: 4px; vertical-align: middle; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; font-family: inherit; }
+  .form-group textarea { min-height: 60px; resize: vertical; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--text4); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: var(--green); color: #fff; width: 100%; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-danger:hover { filter: brightness(1.2); }
+  .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--bg3); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .output-box { background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; height: 400px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+  .output-box .info { color: var(--accent); }
+  .output-box .success { color: var(--green); }
+  .output-box .error { color: var(--red); }
+  .output-box .warn { color: var(--yellow); }
+  .results-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+  .stat { background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center; }
+  .stat .value { font-size: 22px; font-weight: 700; color: var(--text2); }
+  .stat .label { font-size: 11px; color: var(--text3); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .metrics-grid .stat { padding: 8px; }
+  .metrics-grid .stat .value { font-size: 15px; }
+  .metrics-grid .stat .label { font-size: 9px; }
+  .percentile-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .percentile-table th { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--text3); font-weight: 600; font-size: 11px; }
+  .percentile-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .history-table th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .history-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .history-table tr:hover td { background: var(--bg3); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .tag-login { background: #1f6feb33; color: var(--accent); }
+  .tag-upload { background: var(--green-bg); color: var(--green); }
+  .tag-both { background: var(--yellow); color: #000; }
+  .tag-generic { background: var(--purple); color: #fff; }
+  .tag-har { background: var(--orange); color: #fff; }
+  .tag-websocket { background: #6f42c133; color: #6f42c1; }
+  .tag-grpc { background: #e34c2633; color: #e34c26; }
+  .tag-browser { background: #0c8ce933; color: #0c8ce9; }
+  .tag-stress { background: var(--red); color: #fff; }
+  .tag-done { background: var(--green-bg); color: var(--green); }
+  .tag-running { background: var(--yellow); color: #000; }
+  .tag-canceled, .tag-error { background: var(--red); color: #fff; }
+  .tag-scheduled { background: #6f42c133; color: #6f42c1; }
+  .advanced-toggle { color: var(--accent); font-size: 13px; cursor: pointer; user-select: none; margin-bottom: 12px; display: inline-block; }
+  .advanced-toggle:hover { text-decoration: underline; }
+  .advanced-options { display: none; }
+  .advanced-options.show { display: block; }
+  .distributed-box { background: var(--bg3); border: 1px solid var(--yellow); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .distributed-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .distributed-toggle input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--yellow); cursor: pointer; }
+  .distributed-label { font-size: 14px; font-weight: 500; color: var(--text2); }
+  .beta-badge { background: var(--yellow); color: #000; padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .distributed-options { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .distributed-note { font-size: 12px; color: var(--text3); margin-top: 8px; font-style: italic; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text4); }
+  .empty-state p { font-size: 14px; margin-top: 8px; }
+  .tab-bar { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text2); border-bottom-color: var(--orange); }
+  .progress-bar { background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; height: 8px; overflow: hidden; margin-top: 8px; }
+  .progress-bar .fill { height: 100%; background: var(--green); transition: width 0.5s; border-radius: 4px; }
+  .progress-label { font-size: 11px; color: var(--text3); text-align: center; margin-top: 4px; }
+  .generic-request { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .generic-request .req-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .generic-request .req-header select { width: auto; min-width: 80px; }
+  .generic-request .req-header input { flex: 1; }
+  .generic-request .req-number { color: var(--text3); font-size: 11px; font-weight: 600; min-width: 80px; }
+  .har-info { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 8px; }
+  .har-info .har-count { font-size: 18px; font-weight: 700; color: var(--text2); }
+  .har-info .har-label { font-size: 12px; color: var(--text3); }
+  .section-toggle { display: none; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; font-size: 13px; color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 1000; opacity: 0; transform: translateY(10px); transition: all 0.3s; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+  .chart-container { background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 8px; height: 220px; position: relative; }
+  .comparison-box { background: var(--bg3); border: 1px solid var(--accent); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .schedule-item, .webhook-item { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .responses-box { max-height: 300px; overflow-y: auto; font-size: 12px; }
+  .response-entry { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .response-entry .bad-method { color: var(--red); font-weight: 600; }
+  @media (max-width: 600px) { .results-summary { grid-template-columns: repeat(2, 1fr); } .metrics-grid { grid-template-columns: repeat(2, 1fr); } .comparison-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>⚡ Load Tester</h1>
+    <span class="badge">k6 v2</span>
+    <div class="status-bar">
+      <span id="k6status"><span class="status-dot offline"></span>k6: verificando...</span>
+      <span id="activeTests" style="display:none;"></span>
+      <a href="/api/docs" target="_blank" class="theme-btn" title="API Docs">📖 API</a>
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">☀️ Claro</button>
+    </div>
+  </header>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="main-grid">
+    <div>
+      <div class="card">
+        <h2 onclick="toggleCollapse(this)"><span class="collapse-icon">▼</span> Nuevo Test</h2>
+        <div class="card-body">
+        <form id="testForm">
+          <div class="form-group">
+            <label>IP / Dominio / URL <span class="tooltip-icon" title="URL o IP del servidor a probar. Ej: 192.168.1.1, midominio.com, https://ejemplo.com">?</span></label>
+            <input type="text" id="targetUrl" placeholder="ej: 192.168.1.1, midominio.com, https://ejemplo.com" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tipo de prueba <span class="tooltip-icon" title="Tipo de prueba de carga a ejecutar: Login, Subida, Ambos, Genérico (cualquier endpoint), WebSocket, gRPC, Browser (k6 browser), Estrés progresivo, o desde archivo HAR">?</span></label>
+              <select id="testType" onchange="toggleTestType()">
+                <option value="login">Login</option>
+                <option value="upload">Subida de archivo</option>
+                <option value="both">Ambos</option>
+                <option value="generic">Genérico (cualquier endpoint)</option>
+                <option value="har">Desde HAR</option>
+                <option value="websocket">WebSocket</option>
+                <option value="grpc">gRPC</option>
+                <option value="browser">Browser (k6)</option>
+                <option value="stress">Estrés progresivo</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Usuarios simultáneos <span class="tooltip-icon" title="Número de usuarios virtuales simulados concurrentemente">?</span></label>
+              <input type="number" id="numUsers" value="100" min="1" max="1000000">
+            </div>
+          </div>
+
+          <div class="comparison-box" style="margin-bottom:12px;">
+            <label class="distributed-toggle">
+              <input type="checkbox" id="comparisonMode" onchange="toggleComparison()">
+              <span class="distributed-label">🔁 Comparativa lado a lado</span>
+            </label>
+            <div id="comparisonOptions" style="display:none;margin-top:8px;">
+              <div class="form-group" style="margin-bottom:8px;">
+                <label>URL A</label>
+                <input type="text" id="compUrlA" placeholder="https://server1.example.com">
+              </div>
+              <div class="form-group">
+                <label>URL B</label>
+                <input type="text" id="compUrlB" placeholder="https://server2.example.com">
+              </div>
+            </div>
+          </div>
+
+          <div class="section-toggle" id="loginSection">
+            <div class="form-group"><label>Endpoint de login</label><input type="text" id="loginEndpoint" value="/login"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Usuario</label><input type="text" id="username" value="admin"></div>
+              <div class="form-group"><label>Contraseña</label><input type="text" id="password" value="admin"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Campo username</label><input type="text" id="usernameField" value="username"></div>
+              <div class="form-group"><label>Campo password</label><input type="text" id="passwordField" value="password"></div>
+            </div>
+            <div class="form-group"><label>Headers login (Key: Value, uno/linea)</label><textarea id="loginHeaders" placeholder="Authorization: Bearer token123"></textarea></div>
+          </div>
+
+          <div class="section-toggle" id="uploadSection">
+            <div class="form-group"><label>Endpoint de subida</label><input type="text" id="uploadEndpoint" value="/upload"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Método</label><select id="uploadMethod"><option value="POST">POST</option><option value="PUT">PUT</option></select></div>
+              <div class="form-group"><label>Campo archivo</label><input type="text" id="fileField" value="file"></div>
+            </div>
+            <div class="form-group"><label>Tamaño archivo (bytes, max 10MB)</label><input type="number" id="fileSize" value="1024" min="1" max="10485760"></div>
+            <div class="form-group"><label>Headers subida (Key: Value, uno/linea)</label><textarea id="uploadHeaders" placeholder="Authorization: Bearer token123"></textarea></div>
+          </div>
+
+          <div class="section-toggle" id="genericSection" style="display:none;">
+            <div class="form-group"><label>Peticiones (cada VU elige una aleatoriamente)</label></div>
+            <div id="genericRequestsContainer">
+              <div class="generic-request" data-index="0">
+                <div class="req-header">
+                  <span class="req-number">#1</span>
+                  <select class="req-method" style="width:auto;min-width:80px;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+                    <option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option>
+                  </select>
+                  <input type="text" class="req-path" placeholder="/api/endpoint" style="flex:1;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+                  <button type="button" class="btn btn-sm btn-danger remove-request" onclick="removeRequest(this)" style="display:none;">✕</button>
+                </div>
+                <div class="form-row">
+                  <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Headers</label><textarea class="req-headers" style="min-height:40px;font-size:11px;" placeholder="Content-Type: application/json"></textarea></div>
+                  <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Body</label><textarea class="req-body" style="min-height:40px;font-size:11px;" placeholder='{"key":"value"}'></textarea></div>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addRequest()" style="width:100%;margin-top:4px;">+ Añadir petición</button>
+          </div>
+
+          <div class="section-toggle" id="harSection" style="display:none;">
+            <div class="form-group"><label>Archivo HAR</label><input type="file" id="harFile" accept=".har"></div>
+            <div id="harParseResult"></div>
+            <button type="button" class="btn btn-outline btn-sm" id="parseHarBtn" onclick="parseHar()" style="width:100%;">📂 Parsear HAR</button>
+          </div>
+
+          <div class="section-toggle" id="websocketSection" style="display:none;">
+            <div class="form-group"><label>Endpoint WebSocket <span class="tooltip-icon" title="Ruta del WebSocket, ej: /ws/chat">?</span></label><input type="text" id="wsEndpoint" value="/ws" placeholder="/ws"></div>
+            <div class="form-group"><label>Mensaje inicial <span class="tooltip-icon" title="Mensaje enviado al abrir conexión">?</span></label><input type="text" id="wsMessage" value='{"type":"ping"}' placeholder='{"type":"ping"}'></div>
+          </div>
+
+          <div class="section-toggle" id="grpcSection" style="display:none;">
+            <div class="form-group"><label>Dirección gRPC <span class="tooltip-icon" title="host:puerto del servidor gRPC">?</span></label><input type="text" id="grpcAddress" placeholder="localhost:50051"></div>
+            <div class="form-group"><label>Proto file <span class="tooltip-icon" title="Ruta al archivo .proto">?</span></label><input type="text" id="grpcProto" placeholder="/path/to/service.proto"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Servicio <span class="tooltip-icon" title="Nombre del servicio gRPC">?</span></label><input type="text" id="grpcService" placeholder="myservice.MyService"></div>
+              <div class="form-group"><label>Método <span class="tooltip-icon" title="Nombre del método gRPC">?</span></label><input type="text" id="grpcMethod" placeholder="MyMethod"></div>
+            </div>
+          </div>
+
+          <div class="section-toggle" id="browserSection" style="display:none;">
+            <div class="form-group"><label>Ruta a navegar <span class="tooltip-icon" title="Ruta a cargar en el navegador (requiere k6 browser habilitado)">?</span></label><input type="text" id="browserPath" value="/" placeholder="/"></div>
+          </div>
+
+          <div class="section-toggle" id="stressSection" style="display:none;">
+            <div class="form-row">
+              <div class="form-group"><label>Usuarios iniciales</label><input type="number" id="stressInitialUsers" value="5" min="1"></div>
+              <div class="form-group"><label>Usuarios máximos <span class="tooltip-icon" title="La carga se duplica progresivamente hasta este tope">?</span></label><input type="number" id="stressMaxUsers" value="1000" min="1"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Duración por escalón <span class="tooltip-icon" title="Tiempo en cada escalón de carga (ej: 30s, 1m)">?</span></label><input type="text" id="stressStepDuration" value="30s" placeholder="30s"></div>
+              <div class="form-group"><label>Método HTTP</label><select id="stressMethod"><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option></select></div>
+            </div>
+            <div class="form-group"><label>Endpoint <span class="tooltip-icon" title="Endpoint a estresar">?</span></label><input type="text" id="stressEndpoint" value="/" placeholder="/"></div>
+            <div class="form-group"><label>Body (opcional)</label><textarea id="stressBody" style="min-height:40px;font-size:12px;" placeholder='{"key":"value"}'></textarea></div>
+            <div class="form-group"><label>Headers</label><textarea id="stressHeaders" style="min-height:40px;font-size:12px;" placeholder="Authorization: Bearer token123"></textarea></div>
+          </div>
+
+          <div class="distributed-box">
+            <label class="distributed-toggle">
+              <input type="checkbox" id="distributedMode" onchange="toggleDistributed()">
+              <span class="distributed-label">🤖 Modo distribuido <span class="beta-badge">BETA</span></span>
+            </label>
+            <div class="distributed-options" id="distributedOptions" style="display:none;">
+              <div class="form-row">
+                <div class="form-group"><label>Instancias</label><input type="number" id="numInstances" value="4" min="2" max="64"></div>
+                <div class="form-group"><label>Usuarios/instancia</label><input type="text" id="usersPerInstance" value="--" disabled></div>
+              </div>
+              <p class="distributed-note">Divide usuarios entre N instancias de k6 simultáneas.</p>
+            </div>
+          </div>
+
+          <div class="advanced-toggle" onclick="toggleAdvanced()">⚙ Opciones avanzadas</div>
+          <div class="advanced-options" id="advancedOptions">
+            <div class="form-group">
+              <label>Etapas de la prueba</label>
+              <div class="form-row-3">
+                <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Ramp-up</label><input type="text" id="stageRampUp" value="30s" placeholder="30s"></div>
+                <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Sostenido</label><input type="text" id="stageSustain" value="1m" placeholder="1m"></div>
+                <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Ramp-down</label><input type="text" id="stageRampDown" value="30s" placeholder="30s"></div>
+              </div>
+            </div>
+            <div class="form-group"><label>Thresholds personalizados <span class="tooltip-icon" title="JSON con thresholds por métrica. Ej: {\"http_req_duration\":[\"p(95)<3000\"],\"http_req_failed\":[\"rate<0.05\"]}">?</span></label><textarea id="customThresholds" style="min-height:50px;font-size:12px;" placeholder='{"http_req_duration":["p(95)<3000"],"http_req_failed":["rate<0.05"]}'></textarea></div>
+          </div>
+
+          <div class="btn-group">
+            <button type="submit" class="btn btn-primary" id="runBtn">▶ Ejecutar prueba</button>
+            <button type="button" class="btn btn-danger" id="cancelBtn" style="display:none;" onclick="cancelTest()">⛔ Cancelar</button>
+          </div>
+        </form>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h2 onclick="toggleCollapse(this)"><span class="collapse-icon">▼</span> Programar pruebas</h2>
+        <div class="card-body">
+        <div id="scheduleForm" style="margin-bottom:12px;">
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:8px;"><label>Nombre</label><input type="text" id="schedName" placeholder="Test nocturno" value="Test nocturno"></div>
+            <div class="form-group" style="margin-bottom:8px;"><label>Intervalo (minutos)</label><input type="number" id="schedInterval" value="1440" min="1"></div>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="createSchedule()" style="width:100%;">⏰ Programar con configuración actual</button>
+        </div>
+        <div id="schedulesList"><div class="empty-state"><p>Sin tareas programadas</p></div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h2 onclick="toggleCollapse(this)"><span class="collapse-icon">▼</span> Webhooks</h2>
+        <div class="card-body">
+        <div id="webhookForm" style="margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:8px;"><label>URL del webhook</label><input type="url" id="webhookUrl" placeholder="https://hooks.slack.com/..."></div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="createWebhook()" style="width:100%;">🔔 Añadir webhook</button>
+        </div>
+        <div id="webhooksList"><div class="empty-state"><p>Sin webhooks configurados</p></div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h2 onclick="toggleCollapse(this)"><span class="collapse-icon">▼</span> Historial</h2>
+        <div class="card-body">
+        <div id="historyContent"><div class="empty-state"><p>No hay pruebas ejecutadas aún</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="tab-bar">
+          <div class="tab active" onclick="switchTab('output', this)">Salida</div>
+          <div class="tab" onclick="switchTab('results', this)">Resultados</div>
+          <div class="tab" onclick="switchTab('charts', this)">Gráficas</div>
+          <div class="tab" onclick="switchTab('comparison', this)" id="comparisonTab">Comparativa</div>
+        </div>
+
+        <div id="progressSection" style="display:none;margin-bottom:12px;">
+          <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%;"></div></div>
+          <div class="progress-label" id="progressLabel">Iniciando...</div>
+        </div>
+
+        <div id="outputTab">
+          <div class="output-box" id="outputBox"><span class="info">Esperando prueba...</span></div>
+        </div>
+
+        <div id="resultsTab" style="display:none;">
+          <div class="results-summary" id="resultsSummary">
+            <div class="stat"><div class="value" id="rRequests">-</div><div class="label">Requests</div></div>
+            <div class="stat"><div class="value" id="rDuration">-</div><div class="label">p95 (ms)</div></div>
+            <div class="stat"><div class="value" id="rFailed">-</div><div class="label">Fallos</div></div>
+            <div class="stat"><div class="value" id="rRps">-</div><div class="label">Req/s</div></div>
+          </div>
+
+          <div class="metrics-grid" id="extraMetrics" style="display:none;">
+            <div class="stat"><div class="value" id="rMin">-</div><div class="label">Min</div></div>
+            <div class="stat"><div class="value" id="rAvg">-</div><div class="label">Avg</div></div>
+            <div class="stat"><div class="value" id="rMed">-</div><div class="label">Median</div></div>
+            <div class="stat"><div class="value" id="rMax">-</div><div class="label">Max</div></div>
+            <div class="stat"><div class="value" id="rP99">-</div><div class="label">p99</div></div>
+            <div class="stat"><div class="value" id="rP90">-</div><div class="label">p90</div></div>
+            <div class="stat"><div class="value" id="rP75">-</div><div class="label">p75</div></div>
+            <div class="stat"><div class="value" id="rP50">-</div><div class="label">p50</div></div>
+          </div>
+
+          <div class="btn-group" id="exportButtons" style="display:none;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportResults('json')">📥 JSON</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportResults('csv')">📥 CSV</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportPDF()">📄 PDF</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="viewResponses()">📋 Log respuestas</button>
+          </div>
+
+          <div class="output-box" id="resultsBox" style="height:300px;margin-top:12px;"><span class="info">Esperando resultados...</span></div>
+        </div>
+
+        <div id="chartsTab" style="display:none;">
+          <div class="chart-container" id="chartDuration"><canvas id="chartDurationCanvas"></canvas></div>
+          <div class="chart-container" style="margin-top:8px;" id="chartRps"><canvas id="chartRpsCanvas"></canvas></div>
+          <div class="chart-container" style="margin-top:8px;" id="chartFail"><canvas id="chartFailCanvas"></canvas></div>
+        </div>
+
+        <div id="comparisonContent" style="display:none;">
+          <div class="comparison-grid" id="comparisonGrid">
+            <div><h3 style="font-size:14px;margin-bottom:8px;" id="compTitleA">URL A</h3><div class="results-summary" id="compSummaryA">...</div></div>
+            <div><h3 style="font-size:14px;margin-bottom:8px;" id="compTitleB">URL B</h3><div class="results-summary" id="compSummaryB">...</div></div>
+          </div>
+          <div class="chart-container" style="margin-top:8px;height:250px;" id="chartComp"><canvas id="chartCompCanvas"></canvas></div>
+          <div id="compComparisonEmpty" class="empty-state" style="display:none;"><p>Inicia una comparativa desde el formulario</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentTestId = null;
+let eventSource = null;
+let testStartTime = null;
+let testConfig = null;
+let progressTimer = null;
+let harEntries = [];
+let requestCounter = 1;
+let chartDuration = null, chartRps = null, chartFail = null, chartComp = null;
+let currentCompId = null;
+let chartData = { timestamps: [], p95: [], rps: [], failRate: [] };
+
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status'); const d = await r.json();
+    const el = document.getElementById('k6status');
+    el.innerHTML = d.k6
+      ? `<span class="status-dot online"></span>k6: ${d.version || 'OK'}`
+      : `<span class="status-dot offline"></span>k6: NO DISPONIBLE`;
+    const at = document.getElementById('activeTests');
+    if (d.active_tests > 0) { at.style.display='inline'; at.innerHTML = ` · <span class="status-dot running"></span>${d.active_tests} activos`; }
+    else { at.style.display='none'; }
+  } catch(e) { document.getElementById('k6status').innerHTML = '<span class="status-dot offline"></span>Error de conexión'; }
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('themeBtn').textContent = isDark ? '🌙 Oscuro' : '☀️ Claro';
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  // Redraw charts with new colors
+  if (chartDuration) updateChartTheme(chartDuration);
+  if (chartRps) updateChartTheme(chartRps);
+  if (chartFail) updateChartTheme(chartFail);
+  if (chartComp) updateChartTheme(chartComp);
+}
+
+function getChartColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    grid: isDark ? '#30363d' : '#d0d7de',
+    text: isDark ? '#8b949e' : '#656d76',
+    green: isDark ? '#3fb950' : '#1a7f37',
+    blue: isDark ? '#58a6ff' : '#0969da',
+    red: isDark ? '#f85149' : '#cf222e',
+  };
+}
+
+function updateChartTheme(chart) {
+  const c = getChartColors();
+  chart.options.scales.x.grid.color = c.grid;
+  chart.options.scales.y.grid.color = c.grid;
+  chart.options.scales.x.ticks.color = c.text;
+  chart.options.scales.y.ticks.color = c.text;
+  chart.update();
+}
+
+function toggleTestType() {
+  const type = document.getElementById('testType').value;
+  const m = (t) => document.getElementById(t + 'Section').style.display = (type === t || (['login','upload'].includes(t) && type === 'both')) ? 'block' : 'none';
+  m('login'); m('upload');
+  document.getElementById('genericSection').style.display = type === 'generic' ? 'block' : 'none';
+  document.getElementById('harSection').style.display = type === 'har' ? 'block' : 'none';
+  document.getElementById('websocketSection').style.display = type === 'websocket' ? 'block' : 'none';
+  document.getElementById('grpcSection').style.display = type === 'grpc' ? 'block' : 'none';
+  document.getElementById('browserSection').style.display = type === 'browser' ? 'block' : 'none';
+  document.getElementById('stressSection').style.display = type === 'stress' ? 'block' : 'none';
+}
+
+function toggleAdvanced() { document.getElementById('advancedOptions').classList.toggle('show'); }
+
+function toggleDistributed() {
+  const en = document.getElementById('distributedMode').checked;
+  document.getElementById('distributedOptions').style.display = en ? 'block' : 'none';
+  updateUsersPerInstance();
+}
+
+function toggleComparison() {
+  const en = document.getElementById('comparisonMode').checked;
+  document.getElementById('comparisonOptions').style.display = en ? 'block' : 'none';
+}
+
+function toggleCollapse(el) {
+  el.classList.toggle('collapsed');
+  const body = el.nextElementSibling;
+  body.classList.toggle('collapsed');
+}
+
+function updateUsersPerInstance() {
+  const t = parseInt(document.getElementById('numUsers').value) || 0;
+  const n = parseInt(document.getElementById('numInstances').value) || 1;
+  document.getElementById('usersPerInstance').value = t > 0 ? Math.ceil(t / n).toLocaleString() : '--';
+}
+document.getElementById('numUsers').addEventListener('input', updateUsersPerInstance);
+document.getElementById('numInstances').addEventListener('input', updateUsersPerInstance);
+
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    document.getElementById('testForm').dispatchEvent(new Event('submit'));
+  }
+});
+
+function addRequest() {
+  const c = document.getElementById('genericRequestsContainer');
+  const d = document.createElement('div'); d.className = 'generic-request'; d.dataset.index = requestCounter;
+  d.innerHTML = `<div class="req-header"><span class="req-number">#${requestCounter+1}</span>
+    <select class="req-method" style="width:auto;min-width:80px;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+      <option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option>
+    </select>
+    <input type="text" class="req-path" placeholder="/api/endpoint" style="flex:1;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+    <button type="button" class="btn btn-sm btn-danger remove-request" onclick="removeRequest(this)">✕</button></div>
+    <div class="form-row"><div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Headers</label><textarea class="req-headers" style="min-height:40px;font-size:11px;"></textarea></div>
+    <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Body</label><textarea class="req-body" style="min-height:40px;font-size:11px;"></textarea></div></div>`;
+  c.appendChild(d); requestCounter++;
+}
+
+function removeRequest(b) { const c = document.getElementById('genericRequestsContainer');
+  if (c.children.length > 1) { b.closest('.generic-request').remove(); updateRequestNumbers(); }
+  else showToast('Debe haber al menos una petición', 'error');
+}
+function updateRequestNumbers() {
+  document.querySelectorAll('.generic-request').forEach((r,i) => {
+    r.querySelector('.req-number').textContent = `#${i+1}`;
+    r.querySelector('.remove-request').style.display = i > 0 ? '' : 'none';
+  });
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['output','results','charts','comparison'].forEach(t => {
+    document.getElementById(t === 'charts' ? 'chartsTab' : t === 'comparison' ? 'comparisonContent' : t + 'Tab').style.display = t === name ? 'block' : 'none';
+  });
+  if (name === 'charts' && chartData.timestamps.length > 0) renderCharts();
+  if (name === 'comparison' && currentCompId) loadComparison(currentCompId);
+}
+
+function appendOutput(text, type) {
+  const box = document.getElementById('outputBox');
+  box.innerHTML += `<span class="${type||'info'}">${escapeHtml(text)}</span>\n`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + (type||'') + ' show';
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+function parseHeadersText(text) {
+  const h = {}; if (!text) return h;
+  text.split('\n').forEach(l => { const i = l.indexOf(':'); if (i>0) h[l.substring(0,i).trim()] = l.substring(i+1).trim(); });
+  return h;
+}
+
+function parseDurationToSeconds(d) { const m = d.match(/^(\d+)([smh])$/); if (!m) return 0; const n=parseInt(m[1]); return m[2]==='s'?n:m[2]==='m'?n*60:n*3600; }
+function getTotalTestDuration(p) { return ['stage_ramp_up','stage_sustain','stage_ramp_down'].reduce((a,k)=>a+parseDurationToSeconds(p[k]||'30s'),0); }
+function getStageLabel(elapsed, p) {
+  const r = parseDurationToSeconds(p.stage_ramp_up||'30s'), s = parseDurationToSeconds(p.stage_sustain||'1m'), d = parseDurationToSeconds(p.stage_ramp_down||'30s'), t=r+s+d;
+  if (elapsed<r) return {stage:1,name:'Ramp-up',progress:(elapsed/t)*100};
+  if (elapsed<r+s) return {stage:2,name:'Sostenido',progress:(elapsed/t)*100};
+  if (elapsed<t) return {stage:3,name:'Ramp-down',progress:(elapsed/t)*100};
+  return {stage:3,name:'Finalizando',progress:100};
+}
+
+function startProgress(testId, params) {
+  clearInterval(progressTimer); testStartTime = Date.now();
+  const totalMs = getTotalTestDuration(params) * 1000;
+  document.getElementById('progressSection').style.display = 'block';
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - testStartTime;
+    const stage = getStageLabel(elapsed/1000, params);
+    const pct = Math.min(stage.progress, 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = `Etapa ${stage.stage}/3: ${stage.name} (${Math.round(elapsed/1000)}s / ${Math.round(totalMs/1000)}s)`;
+    if (pct >= 100) { clearInterval(progressTimer); document.getElementById('progressLabel').textContent = 'Completado'; }
+  }, 500);
+}
+function stopProgress() {
+  clearInterval(progressTimer); document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('progressLabel').textContent = 'Completado';
+  setTimeout(() => document.getElementById('progressSection').style.display = 'none', 2000);
+}
+
+async function parseHar() {
+  const fi = document.getElementById('harFile');
+  if (!fi.files.length) { showToast('Selecciona un archivo .har', 'error'); return; }
+  const fd = new FormData(); fd.append('file', fi.files[0]);
+  const btn = document.getElementById('parseHarBtn'); btn.disabled = true; btn.textContent = '⏳ Parseando...';
+  try {
+    const r = await fetch('/api/har/parse', {method:'POST',body:fd}); const d = await r.json();
+    if (d.error) { document.getElementById('harParseResult').innerHTML = `<div class="har-info"><span style="color:var(--red)">${escapeHtml(d.error)}</span></div>`; showToast('Error','error'); }
+    else { harEntries = d.entries||[]; document.getElementById('harParseResult').innerHTML = `<div class="har-info"><div class="har-count">${d.total}</div><div class="har-label">peticiones encontradas</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Se usarán las primeras ${Math.min(d.total,100)}</div></div>`; showToast(`HAR: ${d.total} peticiones`,'success'); }
+  } catch(e) { showToast('Error de conexión','error'); }
+  finally { btn.disabled=false; btn.textContent='📂 Parsear HAR'; }
+}
+
+function buildPayload() {
+  const type = document.getElementById('testType').value;
+  const loginHeaders = parseHeadersText(document.getElementById('loginHeaders').value);
+  const uploadHeaders = parseHeadersText(document.getElementById('uploadHeaders').value);
+  const p = {
+    target_url: document.getElementById('targetUrl').value,
+    test_type: type, users: parseInt(document.getElementById('numUsers').value),
+    distributed: document.getElementById('distributedMode').checked,
+    instances: document.getElementById('distributedMode').checked ? parseInt(document.getElementById('numInstances').value) : 1,
+    login_endpoint: document.getElementById('loginEndpoint').value,
+    upload_endpoint: document.getElementById('uploadEndpoint').value,
+    username: document.getElementById('username').value,
+    password: document.getElementById('password').value,
+    username_field: document.getElementById('usernameField').value,
+    password_field: document.getElementById('passwordField').value,
+    file_field: document.getElementById('fileField').value,
+    file_size: parseInt(document.getElementById('fileSize').value),
+    upload_method: document.getElementById('uploadMethod').value,
+    login_headers: loginHeaders, upload_headers: uploadHeaders,
+    stage_ramp_up: document.getElementById('stageRampUp').value || '30s',
+    stage_sustain: document.getElementById('stageSustain').value || '1m',
+    stage_ramp_down: document.getElementById('stageRampDown').value || '30s',
+    custom_thresholds: {},
+  };
+  const ct = document.getElementById('customThresholds').value.trim();
+  if (ct) { try { p.custom_thresholds = JSON.parse(ct); } catch(e) { showToast('Thresholds JSON inválido','error'); return null; } }
+
+  if (type === 'generic') {
+    const reqs = []; document.querySelectorAll('.generic-request').forEach(r => {
+      const path = r.querySelector('.req-path').value.trim(); if (!path) return;
+      const h = {}; (r.querySelector('.req-headers').value||'').split('\n').forEach(l => {const i=l.indexOf(':'); if(i>0) h[l.substring(0,i).trim()]=l.substring(i+1).trim();});
+      reqs.push({method:r.querySelector('.req-method').value,path,headers:h,body:r.querySelector('.req-body').value||''});
+    });
+    if (!reqs.length) { showToast('Agrega al menos una petición','error'); return null; }
+    p.requests = reqs;
+  }
+  if (type === 'har') {
+    if (!harEntries.length) { showToast('Primero parsea un HAR','error'); return null; }
+    p.har_entries = harEntries;
+  }
+  if (type === 'websocket') {
+    p.ws_endpoint = document.getElementById('wsEndpoint').value;
+    p.ws_message = document.getElementById('wsMessage').value;
+  }
+  if (type === 'grpc') {
+    p.grpc_address = document.getElementById('grpcAddress').value;
+    p.grpc_proto = document.getElementById('grpcProto').value;
+    p.grpc_service = document.getElementById('grpcService').value;
+    p.grpc_method = document.getElementById('grpcMethod').value;
+  }
+  if (type === 'browser') {
+    p.browser_path = document.getElementById('browserPath').value;
+  }
+  if (type === 'stress') {
+    p.stress_initial_users = parseInt(document.getElementById('stressInitialUsers').value);
+    p.stress_max_users = parseInt(document.getElementById('stressMaxUsers').value);
+    p.stress_step_duration = document.getElementById('stressStepDuration').value;
+    p.stress_method = document.getElementById('stressMethod').value;
+    p.stress_endpoint = document.getElementById('stressEndpoint').value;
+    p.stress_body = document.getElementById('stressBody').value;
+    const sh = parseHeadersText(document.getElementById('stressHeaders').value);
+    p.stress_headers = sh;
+  }
+  return p;
+}
+
+document.getElementById('testForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('runBtn'), cancelBtn = document.getElementById('cancelBtn');
+  btn.disabled = true; btn.textContent = '▶ Ejecutando...';
+
+  const comparison = document.getElementById('comparisonMode').checked;
+  if (comparison) {
+    const urlA = document.getElementById('compUrlA').value.trim();
+    const urlB = document.getElementById('compUrlB').value.trim();
+    if (!urlA || !urlB) { showToast('Completa ambas URLs para la comparativa','error'); btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; return; }
+    const p = buildPayload(); if (!p) { btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; return; }
+    const payload = { url_a: urlA, url_b: urlB, ...p };
+    delete payload.target_url;
+    document.getElementById('outputBox').innerHTML = '';
+    try {
+      const r = await fetch('/api/comparison', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d = await r.json();
+      if (d.error) { showToast(d.error,'error'); btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; return; }
+      currentCompId = d.comp_id;
+      appendOutput(`[${new Date().toLocaleTimeString()}] Comparativa: ${urlA} vs ${urlB}`);
+      appendOutput(`[${new Date().toLocaleTimeString()}] Test A: ${d.test_a}, Test B: ${d.test_b}`);
+      currentTestId = d.test_a;
+      startProgress(d.test_a, p);
+      pollComparison(d.comp_id);
+    } catch(err) { appendOutput(`ERROR: ${err.message}`,'error'); }
+    finally { btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; }
+    return;
+  }
+
+  const p = buildPayload(); if (!p) { btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; return; }
+  document.getElementById('outputBox').innerHTML = '';
+  document.getElementById('resultsSummary').querySelectorAll('.value').forEach(el=>el.textContent='-');
+  document.getElementById('extraMetrics').style.display = 'none';
+  document.getElementById('exportButtons').style.display = 'none';
+  document.getElementById('resultsBox').innerHTML = '<span class="info">Esperando resultados...</span>';
+  document.getElementById('progressSection').style.display = 'none';
+  chartData = { timestamps: [], p95: [], rps: [], failRate: [] };
+
+  try {
+    const r = await fetch('/api/run', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const d = await r.json();
+    if (d.error) { const m = d.details ? d.error+': '+d.details.join(', ') : d.error; appendOutput(`ERROR: ${m}`,'error'); showToast(d.error,'error'); btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; return; }
+    currentTestId = d.test_id; testConfig = p;
+    appendOutput(`[${new Date().toLocaleTimeString()}] ${d.message}`);
+    appendOutput(`[${new Date().toLocaleTimeString()}] Test ID: ${currentTestId}`);
+    startProgress(currentTestId, p);
+    startStreaming(currentTestId);
+    loadHistory();
+    cancelBtn.style.display = '';
+  } catch(err) { appendOutput(`ERROR: ${err.message}`,'error'); showToast('Error','error'); }
+  finally { btn.disabled=false; btn.textContent='▶ Ejecutar prueba'; }
+});
+
+function startStreaming(testId) {
+  if (eventSource) eventSource.close();
+  startProgress(testId, testConfig);
+  (function poll() {
+    fetch(`/api/results/${testId}`).then(r=>r.json()).then(d => {
+      if (d.error) return;
+      if (d.output && d.output.length) {
+        const last = d.output.slice(-30);
+        document.getElementById('outputBox').innerHTML = last.map(l=>`<span>${escapeHtml(l)}</span>`).join('\n');
+        document.getElementById('outputBox').scrollTop = document.getElementById('outputBox').scrollHeight;
+      }
+      if (d.intermediate) updateCharts(d.intermediate, d.snapshots||[]);
+      if (d.summary) displaySummary(d.summary);
+      if (d.done) {
+        stopProgress();
+        const icon = d.canceled ? '⛔' : '✅', cls = d.canceled ? 'warn' : 'success';
+        appendOutput(`[${new Date().toLocaleTimeString()}] ${icon} Prueba ${d.canceled?'cancelada':'completada'} (código: ${d.returncode})`, cls);
+        appendOutput(`[${new Date().toLocaleTimeString()}] Revisa resultados`, 'info');
+        if (d.error) appendOutput(`[${new Date().toLocaleTimeString()}] Error: ${d.error}`, 'error');
+        document.getElementById('cancelBtn').style.display = 'none';
+        if (d.summary) { document.getElementById('exportButtons').style.display = ''; renderCharts(); }
+        loadHistory(); return;
+      }
+      setTimeout(poll, 500);
+    }).catch(() => setTimeout(poll, 1000));
+  })();
+}
+
+function updateCharts(intermediate, snapshots) {
+  if (intermediate && intermediate.elapsed) {
+    chartData.timestamps.push(intermediate.elapsed);
+    chartData.rps.push(intermediate.http_req_rate || 0);
+    chartData.failRate.push((intermediate.fail_rate || 0) * 100);
+    if (chartData.timestamps.length > 200) {
+      chartData.timestamps.shift(); chartData.rps.shift(); chartData.failRate.shift();
+    }
+  }
+  if (snapshots && snapshots.length > 0) {
+    chartData.p95 = snapshots.map(s => s.avg_duration || 0);
+    chartData.timestamps = snapshots.map(s => s.elapsed || 0);
+    chartData.rps = snapshots.map(s => s.http_req_rate || 0);
+    chartData.failRate = snapshots.map(s => (s.fail_rate || 0) * 100);
+  }
+}
+
+function renderCharts() {
+  const c = getChartColors();
+  const commonOpts = (yLabel) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: c.text, boxWidth: 12, padding: 8 } } },
+    scales: {
+      x: { grid: { color: c.grid }, ticks: { color: c.text, maxTicksLimit: 8 } },
+      y: { grid: { color: c.grid }, ticks: { color: c.text }, title: { display: true, text: yLabel, color: c.text } },
+    },
+  });
+
+  if (chartDuration) chartDuration.destroy();
+  if (chartRps) chartRps.destroy();
+  if (chartFail) chartFail.destroy();
+
+  if (chartData.timestamps.length === 0) return;
+
+  chartDuration = new Chart(document.getElementById('chartDurationCanvas'), {
+    type: 'line', data: {
+      labels: chartData.timestamps.map(s => Math.round(s)+'s'),
+      datasets: [{ label: 'Duración media (ms)', data: chartData.p95, borderColor: c.blue, backgroundColor: c.blue+'33', fill: true, tension: 0.3, pointRadius: 0 }],
+    }, options: commonOpts('ms'),
+  });
+
+  chartRps = new Chart(document.getElementById('chartRpsCanvas'), {
+    type: 'line', data: {
+      labels: chartData.timestamps.map(s => Math.round(s)+'s'),
+      datasets: [{ label: 'Req/s', data: chartData.rps, borderColor: c.green, backgroundColor: c.green+'33', fill: true, tension: 0.3, pointRadius: 0 }],
+    }, options: commonOpts('req/s'),
+  });
+
+  chartFail = new Chart(document.getElementById('chartFailCanvas'), {
+    type: 'line', data: {
+      labels: chartData.timestamps.map(s => Math.round(s)+'s'),
+      datasets: [{ label: 'Tasa fallo %', data: chartData.failRate, borderColor: c.red, backgroundColor: c.red+'33', fill: true, tension: 0.3, pointRadius: 0 }],
+    }, options: commonOpts('%'),
+  });
+}
+
+function renderComparisonCharts(snapshotsA, snapshotsB, labelA, labelB) {
+  if (chartComp) chartComp.destroy();
+  const c = getChartColors();
+  const a = snapshotsA || [], b = snapshotsB || [];
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return;
+  const labels = Array.from({length: maxLen}, (_,i) => i * 2 + 's');
+  chartComp = new Chart(document.getElementById('chartCompCanvas'), {
+    type: 'line', data: {
+      labels,
+      datasets: [
+        { label: labelA + ' (avg ms)', data: a.map(s => s.avg_duration || 0), borderColor: c.blue, backgroundColor: c.blue+'33', fill: false, tension: 0.3, pointRadius: 0, borderDash: [] },
+        { label: labelB + ' (avg ms)', data: b.map(s => s.avg_duration || 0), borderColor: c.red, backgroundColor: c.red+'33', fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,5] },
+      ],
+    }, options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: c.text, boxWidth: 12 } } },
+      scales: { x: { grid: { color: c.grid }, ticks: { color: c.text } }, y: { grid: { color: c.grid }, ticks: { color: c.text }, title: { display: true, text: 'ms', color: c.text } } },
+    },
+  });
+}
+
+function displaySummary(summary) {
+  const m = summary.metrics || {};
+  const r = m['http_reqs'] || {}, d = m['http_req_duration'] || {}, f = m['http_req_failed'] || {};
+  document.getElementById('rRequests').textContent = r.count || r.total || '-';
+  document.getElementById('rDuration').textContent = d['p(95)'] ? d['p(95)'].toFixed(0) : '-';
+  document.getElementById('rFailed').textContent = f.rate ? (f.rate*100).toFixed(1)+'%' : '-';
+  document.getElementById('rRps').textContent = r.rate ? r.rate.toFixed(1) : '-';
+
+  const extra = document.getElementById('extraMetrics');
+  if (d.avg !== undefined || d.max !== undefined) {
+    extra.style.display = '';
+    document.getElementById('rMin').textContent = d.min !== undefined ? d.min.toFixed(1) : '-';
+    document.getElementById('rAvg').textContent = d.avg !== undefined ? d.avg.toFixed(1) : '-';
+    document.getElementById('rMed').textContent = d.med !== undefined ? d.med.toFixed(1) : '-';
+    document.getElementById('rMax').textContent = d.max !== undefined ? d.max.toFixed(1) : '-';
+    document.getElementById('rP99').textContent = d['p(99)'] !== undefined ? d['p(99)'].toFixed(0) : '-';
+    document.getElementById('rP90').textContent = d['p(90)'] !== undefined ? d['p(90)'].toFixed(0) : '-';
+    document.getElementById('rP75').textContent = d['p(75)'] !== undefined ? d['p(75)'].toFixed(0) : '-';
+    document.getElementById('rP50').textContent = d['p(50)'] !== undefined ? d['p(50)'].toFixed(0) : '-';
+  }
+  document.getElementById('resultsBox').textContent = JSON.stringify(summary, null, 2);
+}
+
+async function exportResults(fmt) {
+  if (!currentTestId) return;
+  const r = await fetch(`/api/export/${currentTestId}/${fmt}`);
+  if (!r.ok) { showToast('Error al exportar','error'); return; }
+  const blob = await r.blob(); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`${currentTestId}.${fmt}`; a.click(); URL.revokeObjectURL(url);
+  showToast(`Exportado ${fmt.toUpperCase()}`,'success');
+}
+
+async function exportPDF() {
+  if (!currentTestId) return;
+  const r = await fetch(`/api/results/${currentTestId}`); const data = await r.json();
+  if (!data.summary) { showToast('No hay resultados','error'); return; }
+  const m = data.summary.metrics || {};
+  const dur = m.http_req_duration || {}; const reqs = m.http_reqs || {}; const fail = m.http_req_failed || {};
+  const { jsPDF } = window.jspdf; const doc = new jsPDF();
+  doc.setFontSize(18); doc.text('Load Tester - Resultados', 14, 22);
+  doc.setFontSize(10); doc.text(`Test ID: ${currentTestId}`, 14, 32);
+  doc.text(`URL: ${data.target || '-'}`, 14, 38);
+  doc.text(`Tipo: ${data.type} | Usuarios: ${data.users}`, 14, 44);
+  doc.text(`Fecha: ${data.timestamp ? new Date(data.timestamp).toLocaleString() : '-'}`, 14, 50);
+  doc.setFontSize(14); doc.text('Resumen', 14, 62);
+  doc.setFontSize(10);
+  const ly = 70;
+  doc.text(`Total requests: ${reqs.count || '-'}`, 14, ly);
+  doc.text(`Req/s: ${reqs.rate ? reqs.rate.toFixed(1) : '-'}`, 14, ly+6);
+  doc.text(`Duración media: ${dur.avg ? dur.avg.toFixed(1)+'ms' : '-'}`, 14, ly+12);
+  doc.text(`p95: ${dur['p(95)'] ? dur['p(95)'].toFixed(0)+'ms' : '-'}`, 14, ly+18);
+  doc.text(`Mín: ${dur.min ? dur.min.toFixed(1)+'ms' : '-'}`, 14, ly+24);
+  doc.text(`Máx: ${dur.max ? dur.max.toFixed(1)+'ms' : '-'}`, 14, ly+30);
+  doc.text(`Tasa fallo: ${fail.rate ? (fail.rate*100).toFixed(1)+'%' : '-'}`, 14, ly+36);
+  doc.save(`${currentTestId}.pdf`);
+  showToast('PDF descargado','success');
+}
+
+async function viewResponses() {
+  if (!currentTestId) return;
+  const r = await fetch(`/api/responses/${currentTestId}`); const data = await r.json();
+  const box = document.getElementById('resultsBox');
+  if (!data.responses || !data.responses.length) { box.innerHTML = '<span class="info">No hay respuestas fallidas registradas</span>'; return; }
+  box.innerHTML = data.responses.map(resp => {
+    const cls = resp.status >= 400 ? 'error' : 'info';
+    return `<span class="${cls}">${escapeHtml(resp.method||'?')} ${escapeHtml(resp.url||'')} → ${resp.status} (${(resp.body||'').length} bytes)</span>\n`;
+  }).join('');
+  box.scrollTop = 0;
+}
+
+function pollComparison(compId) {
+  (function poll() {
+    fetch(`/api/comparison/${compId}`).then(r=>r.json()).then(d => {
+      if (d.error) return;
+      updateComparisonResults(d);
+      if (!d.done) setTimeout(poll, 1000);
+    }).catch(() => setTimeout(poll, 2000));
+  })();
+}
+
+function updateComparisonResults(d) {
+  document.getElementById('comparisonTab').style.display = '';
+  const a = d.test_a || {}, b = d.test_b || {};
+  document.getElementById('compTitleA').textContent = a.target || 'URL A';
+  document.getElementById('compTitleB').textContent = b.target || 'URL B';
+
+  const renderCompSide = (sideId, testData) => {
+    const el = document.getElementById(sideId);
+    const m = (testData.summary && testData.summary.metrics) || {};
+    const r = m.http_reqs||{}, du = m.http_req_duration||{}, f = m.http_req_failed||{};
+    el.innerHTML = `
+      <div class="stat"><div class="value">${r.count||'-'}</div><div class="label">Requests</div></div>
+      <div class="stat"><div class="value">${du['p(95)'] ? du['p(95)'].toFixed(0) : '-'}</div><div class="label">p95 (ms)</div></div>
+      <div class="stat"><div class="value">${f.rate ? (f.rate*100).toFixed(1)+'%' : '-'}</div><div class="label">Fallos</div></div>
+      <div class="stat"><div class="value">${r.rate ? r.rate.toFixed(1) : '-'}</div><div class="label">Req/s</div></div>
+    `;
+  };
+  renderCompSide('compSummaryA', a); renderCompSide('compSummaryB', b);
+
+  renderComparisonCharts(a.snapshots||[], b.snapshots||[], a.target||'A', b.target||'B');
+  if (d.done) switchTab('comparison', document.querySelector('.tab:last-child'));
+}
+
+async function loadComparison(compId) {
+  const r = await fetch(`/api/comparison/${compId}`); const d = await r.json();
+  if (!d.error) updateComparisonResults(d);
+}
+
+async function cancelTest() {
+  if (!currentTestId) return;
+  if (!confirm('¿Cancelar la prueba en curso?')) return;
+  await fetch(`/api/cancel/${currentTestId}`, {method:'POST'});
+  document.getElementById('cancelBtn').style.display = 'none';
+  showToast('Test cancelado','success');
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history'); const data = await r.json();
+    const container = document.getElementById('historyContent');
+    if (!data.length) { container.innerHTML = '<div class="empty-state"><p>No hay pruebas ejecutadas aún</p></div>'; return; }
+    const typeMap = {login:'tag-login',upload:'tag-upload',both:'tag-both',generic:'tag-generic',har:'tag-har',websocket:'tag-websocket',grpc:'tag-grpc',browser:'tag-browser',stress:'tag-stress'};
+    let html = '<table class="history-table"><tr><th>ID</th><th>Tipo</th><th>Usuarios</th><th>Inst</th><th>Estado</th><th>Inicio</th><th>Acción</th></tr>';
+    for (const entry of data) {
+      const typeTag = typeMap[entry.type] || 'tag-login';
+      let statusTag, statusText;
+      if (entry.canceled) { statusTag='tag-canceled'; statusText='Cancelado'; }
+      else if (entry.error) { statusTag='tag-error'; statusText='Error'; }
+      else if (entry.done) { statusTag='tag-done'; statusText='Completado'; }
+      else { statusTag='tag-running'; statusText='Ejecutando'; }
+      if (entry.scheduled) { statusText += ' ⏰'; }
+      const inst = entry.instances && entry.instances > 1 ? entry.instances : '-';
+      let timeLabel = '-';
+      if (entry.timestamp) try { timeLabel = new Date(entry.timestamp).toLocaleTimeString(); } catch(e) {}
+      html += `<tr style="cursor:pointer;"><td style="font-family:monospace;font-size:12px;" onclick="viewHistory('${entry.test_id}')">${entry.test_id}</td>
+        <td onclick="viewHistory('${entry.test_id}')"><span class="tag ${typeTag}">${entry.type}</span></td>
+        <td onclick="viewHistory('${entry.test_id}')">${entry.users}</td>
+        <td style="text-align:center;" onclick="viewHistory('${entry.test_id}')">${inst}</td>
+        <td onclick="viewHistory('${entry.test_id}')"><span class="tag ${statusTag}">${statusText}</span></td>
+        <td onclick="viewHistory('${entry.test_id}')" style="font-size:11px;color:var(--text3);">${timeLabel}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();reRunTest('${entry.test_id}')">↻</button></td></tr>`;
+    }
+    html += '</table>'; container.innerHTML = html;
+  } catch(e) {}
+}
+
+async function viewHistory(testId) { fetchResults(testId); }
+
+async function fetchResults(testId) {
+  const r = await fetch(`/api/results/${testId}`); const d = await r.json();
+  currentTestId = testId;
+  if (d.summary) { displaySummary(d.summary); document.getElementById('exportButtons').style.display = ''; }
+  if (d.output) document.getElementById('outputBox').innerHTML = d.output.map(l => `<span>${escapeHtml(l)}</span>`).join('\n');
+  document.getElementById('cancelBtn').style.display = 'none';
+  switchTab('results', document.querySelector('.tab:nth-child(2)'));
+}
+
+async function reRunTest(testId) {
+  const r = await fetch(`/api/results/${testId}`); const d = await r.json();
+  if (d.error) { showToast('Error','error'); return; }
+  const p = d.params || {};
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; };
+  setVal('targetUrl', p.target_url || d.target);
+  setVal('testType', p.test_type || d.type || 'login'); toggleTestType();
+  setVal('numUsers', p.users || d.users || 100);
+  setVal('distributedMode', p.distributed || d.distributed || false); toggleDistributed();
+  setVal('numInstances', p.instances || d.instances || 4);
+  ['loginEndpoint','uploadEndpoint','username','password','usernameField','passwordField','fileField','fileSize','stageRampUp','stageSustain','stageRampDown','uploadMethod'].forEach(k => setVal(k, p[k]));
+  const h2t = (h) => { if (!h || typeof h !== 'object') return ''; return Object.entries(h).map(([k,v])=>`${k}: ${v}`).join('\n'); };
+  setVal('loginHeaders', h2t(p.login_headers)); setVal('uploadHeaders', h2t(p.upload_headers));
+  if (p.custom_thresholds && typeof p.custom_thresholds === 'object') setVal('customThresholds', JSON.stringify(p.custom_thresholds, null, 2));
+
+  if (p.requests && p.requests.length) {
+    const c = document.getElementById('genericRequestsContainer'); c.innerHTML = ''; requestCounter = 0;
+    p.requests.forEach((req, i) => {
+      const d = document.createElement('div'); d.className = 'generic-request';
+      const rm = p.requests.length > 1 ? '' : 'style="display:none"';
+      d.innerHTML = `<div class="req-header"><span class="req-number">#${i+1}</span>
+        <select class="req-method" style="width:auto;min-width:80px;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+          ${['GET','POST','PUT','PATCH','DELETE'].map(m => `<option value="${m}" ${req.method===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+        <input type="text" class="req-path" value="${escapeHtml(req.path||'')}" style="flex:1;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+        <button type="button" class="btn btn-sm btn-danger remove-request" onclick="removeRequest(this)" ${rm}>✕</button></div>
+        <div class="form-row"><div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Headers</label><textarea class="req-headers" style="min-height:40px;font-size:11px;">${h2t(req.headers)}</textarea></div>
+        <div class="form-group" style="margin-bottom:0;"><label style="font-size:11px;">Body</label><textarea class="req-body" style="min-height:40px;font-size:11px;">${escapeHtml(req.body||'')}</textarea></div></div>`;
+      c.appendChild(d); requestCounter = i + 1;
+    });
+  }
+  document.getElementById('testForm').scrollIntoView({behavior:'smooth'});
+  showToast('Parámetros cargados del historial','success');
+}
+
+async function createSchedule() {
+  const p = buildPayload(); if (!p) return;
+  const name = document.getElementById('schedName').value;
+  const interval = parseInt(document.getElementById('schedInterval').value);
+  const r = await fetch('/api/schedules', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, interval_minutes: interval, config: p})});
+  const d = await r.json();
+  if (d.error) { showToast(d.error,'error'); return; }
+  showToast(`Schedule creado: ${name}`,'success');
+  loadSchedules();
+}
+
+async function loadSchedules() {
+  const r = await fetch('/api/schedules'); const data = await r.json();
+  const el = document.getElementById('schedulesList');
+  if (!data.length) { el.innerHTML = '<div class="empty-state"><p>Sin tareas programadas</p></div>'; return; }
+  el.innerHTML = data.map(s => `<div class="schedule-item">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div><strong>${escapeHtml(s.name||'Sin nombre')}</strong><br>
+      <span style="font-size:12px;color:var(--text3);">Cada ${s.interval_minutes} min · ${s.enabled ? 'Activo' : 'Inactivo'}</span>
+      ${s.last_run ? `<br><span style="font-size:11px;color:var(--text3);">Último: ${new Date(s.last_run).toLocaleString()}</span>` : ''}</div>
+      <div><button class="btn btn-sm btn-danger" onclick="deleteSchedule('${s.id}')">✕</button></div>
+    </div></div>`).join('');
+}
+
+async function deleteSchedule(id) {
+  await fetch(`/api/schedules/${id}`, {method:'DELETE'}); loadSchedules(); showToast('Schedule eliminado','success');
+}
+
+async function createWebhook() {
+  const url = document.getElementById('webhookUrl').value.trim();
+  if (!url) { showToast('URL requerida','error'); return; }
+  const r = await fetch('/api/webhooks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url, events: ['completed','failed']})});
+  const d = await r.json();
+  if (d.error) { showToast(d.error,'error'); return; }
+  showToast('Webhook añadido','success'); document.getElementById('webhookUrl').value = ''; loadWebhooks();
+}
+
+async function loadWebhooks() {
+  const r = await fetch('/api/webhooks'); const data = await r.json();
+  const el = document.getElementById('webhooksList');
+  if (!data.length) { el.innerHTML = '<div class="empty-state"><p>Sin webhooks configurados</p></div>'; return; }
+  el.innerHTML = data.map(w => `<div class="webhook-item">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div><span style="font-size:12px;font-family:monospace;">${escapeHtml(w.url)}</span><br>
+      <span style="font-size:11px;color:var(--text3);">Eventos: ${(w.events||[]).join(', ')}</span></div>
+      <div><button class="btn btn-sm btn-danger" onclick="deleteWebhook('${w.id}')">✕</button></div>
+    </div></div>`).join('');
+}
+
+async function deleteWebhook(id) {
+  await fetch(`/api/webhooks/${id}`, {method:'DELETE'}); loadWebhooks(); showToast('Webhook eliminado','success');
+}
+
+function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+
+// Init
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme) { document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('themeBtn').textContent = savedTheme === 'dark' ? '☀️ Claro' : '🌙 Oscuro'; }
+updateRequestNumbers(); toggleTestType(); checkStatus();
+loadHistory(); loadSchedules(); loadWebhooks();
+setInterval(loadHistory, 5000);
+</script>
+</body>
+</html>

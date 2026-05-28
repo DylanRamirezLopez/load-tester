@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+scripts/
+results/
+history/
+responses/
+*.ndjson
+*.json
+schedules.json
+webhooks.json
+.DS_Store
+Thumbs.db
