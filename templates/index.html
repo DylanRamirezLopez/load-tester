@@ -834,10 +834,14 @@ function renderComparisonCharts(snapshotsA, snapshotsB, labelA, labelB) {
 
 function displaySummary(summary) {
   const m = summary.metrics || {};
-  const r = m['http_reqs'] || {}, d = m['http_req_duration'] || {}, f = m['http_req_failed'] || {};
+  const r = m['http_reqs'] || {}, d = m['http_req_duration'] || {}, f = m['http_req_failed'] || {}, c = m['checks'] || {};
   document.getElementById('rRequests').textContent = r.count || r.total || '-';
   document.getElementById('rDuration').textContent = d['p(95)'] ? d['p(95)'].toFixed(0) : '-';
-  document.getElementById('rFailed').textContent = f.rate ? (f.rate*100).toFixed(1)+'%' : '-';
+  let failRate = f.rate;
+  if ((failRate === undefined || failRate === null) && (c.fails + c.passes) > 0) {
+    failRate = c.fails / (c.fails + c.passes);
+  }
+  document.getElementById('rFailed').textContent = (failRate !== undefined && failRate !== null) ? (failRate*100).toFixed(1)+'%' : '-';
   document.getElementById('rRps').textContent = r.rate ? r.rate.toFixed(1) : '-';
 
   const extra = document.getElementById('extraMetrics');
@@ -850,7 +854,7 @@ function displaySummary(summary) {
     document.getElementById('rP99').textContent = d['p(99)'] !== undefined ? d['p(99)'].toFixed(0) : '-';
     document.getElementById('rP90').textContent = d['p(90)'] !== undefined ? d['p(90)'].toFixed(0) : '-';
     document.getElementById('rP75').textContent = d['p(75)'] !== undefined ? d['p(75)'].toFixed(0) : '-';
-    document.getElementById('rP50').textContent = d['p(50)'] !== undefined ? d['p(50)'].toFixed(0) : '-';
+    document.getElementById('rP50').textContent = d['p(50)'] !== undefined ? d['p(50)'].toFixed(0) : (d.med !== undefined ? d.med.toFixed(0) : '-');
   }
   document.getElementById('resultsBox').textContent = JSON.stringify(summary, null, 2);
 }
@@ -985,6 +989,14 @@ async function fetchResults(testId) {
   currentTestId = testId;
   if (d.summary) { displaySummary(d.summary); document.getElementById('exportButtons').style.display = ''; }
   if (d.output) document.getElementById('outputBox').innerHTML = d.output.map(l => `<span>${escapeHtml(l)}</span>`).join('\n');
+  if (d.snapshots && d.snapshots.length > 0) {
+    chartData = {
+      timestamps: d.snapshots.map(s => s.elapsed || 0),
+      p95: d.snapshots.map(s => s.avg_duration || 0),
+      rps: d.snapshots.map(s => s.http_req_rate || 0),
+      failRate: d.snapshots.map(s => (s.fail_rate || 0) * 100),
+    };
+  }
   document.getElementById('cancelBtn').style.display = 'none';
   switchTab('results', document.querySelector('.tab:nth-child(2)'));
 }
